@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Product Definition Developer Tool - Design product definitions as configuration">
+    <title>Product Definition Developer Tool</title>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles/index.css">
+    <link rel="stylesheet" href="styles/components.css">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal active">
+        <div class="modal-content">
+            <h2>Product Definition Tool</h2>
+            <p class="subtitle">Sign in to continue</p>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn btn-primary">Sign In</button>
+                <div class="demo-users">
+                    <p><strong>Demo accounts:</strong></p>
+                    <ul>
+                        <li><code>admin</code> / admin123 - Full access</li>
+                        <li><code>editor</code> / editor123 - Create/edit products</li>
+                        <li><code>viewer</code> / viewer123 - Read-only access</li>
+                    </ul>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="app" class="hidden">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-left">
+                <h1 class="app-title">Product Definition Tool</h1>
+            </div>
+            <div class="header-right">
+                <span id="userDisplay" class="user-display"></span>
+                <button id="logoutBtn" class="btn btn-secondary btn-sm">Logout</button>
+            </div>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="app-nav">
+            <button id="navProducts" class="nav-btn active" data-view="products">
+                <span class="nav-icon">📋</span> Products
+            </button>
+            <button id="navLibrary" class="nav-btn" data-view="library">
+                <span class="nav-icon">📚</span> Question Library
+            </button>
+        </nav>
+
+        <!-- Views Container -->
+        <main class="app-main">
+            <!-- Product List View -->
+            <div id="productsView" class="view active">
+                <div class="view-header">
+                    <h2>Product Definitions</h2>
+                    <div class="view-actions">
+                        <input type="search" id="productSearch" class="search-input" placeholder="Search products...">
+                        <select id="statusFilter" class="filter-select">
+                            <option value="">All Status</option>
+                            <option value="Draft">Draft</option>
+                            <option value="In Review">In Review</option>
+                            <option value="Published">Published</option>
+                            <option value="Deprecated">Deprecated</option>
+                        </select>
+                        <button id="createProductBtn" class="btn btn-primary">
+                            <span>+</span> New Product
+                        </button>
+                    </div>
+                </div>
+                <div id="productList" class="product-list"></div>
+            </div>
+
+            <!-- Designer View (Enterprise Multi-Step Wizard) -->
+            <div id="designerView" class="view">
+                <div class="designer-container">
+
+                    <!-- Top Stepper Header -->
+                    <div class="stepper-header">
+                        <div class="step completed" data-step="1">
+                            <div class="step-indicator">1</div>
+                            <span class="step-label">General Info</span>
+                        </div>
+                        <div class="step-connector"></div>
+                        <div class="step active" data-step="2">
+                            <div class="step-indicator">2</div>
+                            <span class="step-label">Setup Questions</span>
+                        </div>
+                        <div class="step-connector"></div>
+                        <div class="step" data-step="3">
+                            <div class="step-indicator">3</div>
+                            <span class="step-label">Maintenance Questions</span>
+                        </div>
+                        <div class="step-connector"></div>
+                        <div class="step" data-step="4">
+                            <div class="step-indicator">4</div>
+                            <span class="step-label">Preview</span>
+                        </div>
+                        <div class="step-connector"></div>
+                        <div class="step" data-step="5">
+                            <div class="step-indicator">5</div>
+                            <span class="step-label">Review</span>
+                        </div>
+                    </div>
+
+
+                    <!-- Designer 3-Panel Layout -> 2-Panel Layout (Phase 2) -->
+                    <div class="designer-container">
+                        <div class="designer-layout">
+                            <!-- Left Sidebar - Question Types -->
+                            <aside class="designer-sidebar left">
+                                <h3>Question Types</h3>
+                                <div class="toolbox">
+                                    <div class="tool-item" draggable="true" data-type="field-text">
+                                        <span class="tool-drag-handle">::</span>
+                                        <span class="tool-icon">T</span>
+                                        <span class="tool-label">Text Field</span>
+                                        <span class="tool-add">+</span>
+                                    </div>
+                                    <div class="tool-item" draggable="true" data-type="field-number">
+                                        <span class="tool-drag-handle">::</span>
+                                        <span class="tool-icon">123</span>
+                                        <span class="tool-label">Number</span>
+                                        <span class="tool-add">+</span>
+                                    </div>
+                                    <div class="tool-item" draggable="true" data-type="field-optionlist">
+                                        <span class="tool-drag-handle">::</span>
+                                        <span class="tool-icon">☷</span>
+                                        <span class="tool-label">Multiple Choice</span>
+                                        <span class="tool-add">+</span>
+                                    </div>
+                                    <div class="tool-item" draggable="true" data-type="field-date">
+                                        <span class="tool-drag-handle">::</span>
+                                        <span class="tool-icon">📅</span>
+                                        <span class="tool-label">Date</span>
+                                        <span class="tool-add">+</span>
+                                    </div>
+                                    <div class="tool-item" draggable="true" data-type="section">
+                                        <span class="tool-drag-handle">::</span>
+                                        <span class="tool-icon">📁</span>
+                                        <span class="tool-label">Container (Section)</span>
+                                        <span class="tool-add">+</span>
+                                    </div>
+                                </div>
+                            </aside>
+
+                            <!-- Center - Structured List View -->
+                            <div class="designer-center">
+
+                                <!-- Setup Questions Header -->
+                                <div class="setup-questions-header">
+                                    <div class="setup-header-left">
+                                        <h3>Setup Questions (54)</h3>
+                                        <p class="subtitle">Add a new setup question. Drag to reorder. Select an
+                                            existing
+                                            question to edit details.</p>
+                                    </div>
+                                    <div class="setup-header-right">
+                                        <div class="search-box">
+                                            <input type="text" placeholder="SEARCH Q">
+                                        </div>
+                                        <div class="view-toggles">
+                                            <button class="btn-icon active">☷</button>
+                                            <button class="btn-icon">☰</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Table Headers for the List View -->
+                                <div class="builder-list-header">
+                                    <span class="col-name">Field Name</span>
+                                    <span class="col-toggle">Applicable</span>
+                                    <span class="col-toggle">Required</span>
+                                    <span class="col-toggle">Editable</span>
+                                </div>
+
+                                <!-- The actual sortable list -->
+                                <div id="builderList" class="builder-list">
+                                    <div class="builder-empty">
+                                        <p>Drag elements from the Component Library to start defining the workflow</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Designer Bottom Action Bar -->
+                        <div class="designer-bottom-bar">
+                            <div class="bottom-bar-left">
+                                <button id="backToListBtn" class="btn btn-secondary">CANCEL</button>
+                            </div>
+                            <div class="bottom-bar-right">
+                                <button id="saveProductBtn" class="btn btn-secondary">SAVE</button>
+                                <button class="btn btn-secondary" disabled>PREVIOUS</button>
+                                <button id="nextStepBtn" class="btn btn-primary">NEXT</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Question Library View -->
+            <div id="libraryView" class="view">
+                <div class="view-header">
+                    <h2>Question Library</h2>
+                    <div class="view-actions">
+                        <input type="search" id="librarySearch" class="search-input" placeholder="Search questions...">
+                        <button id="createQuestionBtn" class="btn btn-primary">
+                            <span>+</span> New Question
+                        </button>
+                    </div>
+                </div>
+                <div id="libraryList" class="library-list"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals Container -->
+    <div id="modals"></div>
+
+    <!-- Scripts -->
+    <script type="module" src="js/components/RuleBuilder.js"></script>
+    <script type="module" src="js/components/QuestionLibrary.js"></script>
+    <script type="module" src="js/components/VersionManager.js"></script>
+    <script type="module" src="js/components/ExportView.js"></script>
+    <script type="module" src="js/core/ruleEngine.js"></script>
+    <script type="module" src="js/export/schemaGenerator.js"></script>
+    <script type="module" src="js/app.js"></script>
+</body>
+
+</html>
