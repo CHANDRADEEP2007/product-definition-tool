@@ -89,7 +89,7 @@
 
 /**
  * @typedef {Object} Action
- * @property {string} type - Action type (show, hide, setRequired, setDefault, error)
+ * @property {'show'|'hide'|'setRequired'|'setNotRequired'|'setEditable'|'setNotEditable'|'select'|'deselect'|'select_any_except'|'set_value'|'clear'|'error'} type - Action type
  * @property {*} value - Action value
  */
 
@@ -236,6 +236,7 @@ export const Models = {
             errorMessage: data.errorMessage || ''
         };
     },
+
 
     /**
      * Create a new Question Library Item

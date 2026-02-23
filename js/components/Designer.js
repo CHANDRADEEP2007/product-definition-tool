@@ -758,6 +758,31 @@ const Designer = {
 
         const canEdit = Permissions.can('product:edit');
 
+        let validationFieldsHtml = '';
+        if (field.dataType === 'text' && field.validation?.inputType === 'numeric') {
+            validationFieldsHtml = `
+                <div class="form-group">
+                    <label>Min Value</label>
+                    <input type="number" id="prop-val-min" value="${field.validation?.min !== undefined ? field.validation.min : ''}" ${!canEdit ? 'disabled' : ''}>
+                </div>
+                <div class="form-group">
+                    <label>Max Value</label>
+                    <input type="number" id="prop-val-max" value="${field.validation?.max !== undefined ? field.validation.max : ''}" ${!canEdit ? 'disabled' : ''}>
+                </div>
+            `;
+        } else if (field.dataType === 'date') {
+            validationFieldsHtml = `
+                <div class="form-group">
+                    <label>Minimum Date</label>
+                    <input type="date" id="prop-val-min-date" value="${field.validation?.min_date || ''}" ${!canEdit ? 'disabled' : ''}>
+                </div>
+                <div class="form-group">
+                    <label>Maximum Date</label>
+                    <input type="date" id="prop-val-max-date" value="${field.validation?.max_date || ''}" ${!canEdit ? 'disabled' : ''}>
+                </div>
+            `;
+        }
+
         panel.innerHTML = `
             <div class="property-group">
                 <h4>Field Properties</h4>
@@ -779,6 +804,7 @@ const Designer = {
                         Required
                     </label>
                 </div>
+                ${validationFieldsHtml}
                 ${canEdit ? `
                     <button class="btn btn-primary btn-sm" id="saveFieldBtn">Save Changes</button>
                     <button class="btn btn-danger btn-sm" id="deleteFieldBtn">Delete Field</button>
@@ -792,6 +818,39 @@ const Designer = {
                 field.key = document.getElementById('prop-key').value;
                 field.description = document.getElementById('prop-description').value;
                 field.required = document.getElementById('prop-required').checked;
+
+                // Handle conditional validation bounds
+                if (field.dataType === 'text' && field.validation?.inputType === 'numeric') {
+                    const minInput = document.getElementById('prop-val-min');
+                    const maxInput = document.getElementById('prop-val-max');
+                    if (minInput && minInput.value) {
+                        field.validation.min = Number(minInput.value);
+                    } else if (field.validation) {
+                        delete field.validation.min;
+                    }
+                    if (maxInput && maxInput.value) {
+                        field.validation.max = Number(maxInput.value);
+                    } else if (field.validation) {
+                        delete field.validation.max;
+                    }
+                }
+
+                if (field.dataType === 'date') {
+                    const minDate = document.getElementById('prop-val-min-date');
+                    const maxDate = document.getElementById('prop-val-max-date');
+                    if (!field.validation) field.validation = {};
+                    if (minDate && minDate.value) {
+                        field.validation.min_date = minDate.value;
+                    } else {
+                        delete field.validation.min_date;
+                    }
+                    if (maxDate && maxDate.value) {
+                        field.validation.max_date = maxDate.value;
+                    } else {
+                        delete field.validation.max_date;
+                    }
+                }
+
                 this.save();
                 this.render();
             });

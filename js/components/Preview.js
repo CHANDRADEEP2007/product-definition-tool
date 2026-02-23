@@ -42,6 +42,154 @@ const Preview = {
             this.previewMode = mode;
             this.renderInline(this.currentProduct, document.getElementById('builderList'));
         };
+
+        // Attach listeners for dynamic rules evaluation
+        setTimeout(() => this.attachRuleListeners(), 0);
+    },
+
+    /**
+     * Attach rule event listeners to the preview form inputs
+     */
+    attachRuleListeners() {
+        const form = document.querySelector('.preview-form');
+        if (!form) return;
+
+        form.addEventListener('change', (e) => {
+            this.evaluateRules();
+        });
+
+        // Initial Evaluation
+        this.evaluateRules();
+    },
+
+    /**
+     * Evaluate all rules and apply effects
+     */
+    evaluateRules() {
+        // Collect current form data
+        const formData = {};
+        this.currentProduct.fields.forEach(f => {
+            const input = document.getElementById(`preview-field-${f.id}`);
+            if (!input) return;
+
+            if (input.type === 'checkbox') {
+                // If grouped checkboxes
+                const wrapper = input.closest('.preview-checkbox-group');
+                if (wrapper) {
+                    const checked = Array.from(wrapper.querySelectorAll('input:checked')).map(cb => cb.value);
+                    formData[f.key] = checked.length === 1 ? checked[0] : checked;
+                } else {
+                    formData[f.key] = input.checked;
+                }
+            } else if (input.tagName === 'SELECT') {
+                formData[f.key] = input.value;
+            } else {
+                formData[f.key] = input.value;
+            }
+        });
+
+        // Evaluate rules
+        this.currentProduct.fields.forEach(field => {
+            if (!field.rules || field.rules.length === 0) return;
+
+            field.rules.forEach(rule => {
+                const condition = rule.condition;
+                const sourceValue = formData[condition.fieldKey];
+                let isMatch = false;
+
+                // Evaluate condition
+                if (sourceValue !== undefined) {
+                    const targetValue = condition.value;
+                    if (condition.operator === 'equals') {
+                        // Check if sourceValue is array (multiselect) or scalar
+                        if (Array.isArray(sourceValue)) {
+                            isMatch = sourceValue.includes(targetValue);
+                        } else {
+                            isMatch = (sourceValue === targetValue);
+                        }
+                    } else if (condition.operator === 'not_equals') {
+                        if (Array.isArray(sourceValue)) {
+                            isMatch = !sourceValue.includes(targetValue);
+                        } else {
+                            isMatch = (sourceValue !== targetValue);
+                        }
+                    } else if (condition.operator === 'contains') {
+                        isMatch = sourceValue && typeof sourceValue === 'string' && sourceValue.includes(targetValue);
+                    }
+                }
+
+                // Apply Action If Matched
+                if (isMatch && rule.targetFieldKey) {
+                    this.applyRuleAction(rule.targetFieldKey, rule.action);
+                } else if (!isMatch && rule.targetFieldKey) {
+                    this.reverseRuleAction(rule.targetFieldKey, rule.action);
+                }
+            });
+        });
+    },
+
+    /**
+     * Apply the rule action to the target field
+     */
+    applyRuleAction(targetFieldKey, action) {
+        const targetField = this.currentProduct.fields.find(f => f.key === targetFieldKey);
+        if (!targetField) return;
+
+        const wrapper = document.getElementById(`preview-wrapper-${targetField.id}`);
+        const input = document.getElementById(`preview-field-${targetField.id}`);
+        const label = wrapper?.querySelector('.preview-label');
+
+        if (!wrapper || !input) return;
+
+        switch (action) {
+            case 'show':
+                wrapper.style.display = 'block';
+                break;
+            case 'hide':
+                wrapper.style.display = 'none';
+                // Also clear value conceptually if hidden, though JS visually handles it.
+                break;
+            case 'setRequired':
+                input.required = true;
+                if (label && !label.querySelector('.required-mark')) {
+                    label.innerHTML += '<span class="required-mark">*</span>';
+                }
+                break;
+            case 'setNotRequired':
+                input.required = false;
+                if (label) {
+                    const mark = label.querySelector('.required-mark');
+                    if (mark) mark.remove();
+                }
+                break;
+            case 'setEditable':
+                input.disabled = false;
+                input.readOnly = false;
+                break;
+            case 'setNotEditable':
+                input.disabled = true;
+                input.readOnly = true;
+                break;
+        }
+    },
+
+    /**
+     * Reverse rule action if condition is false
+     */
+    reverseRuleAction(targetFieldKey, action) {
+        // Map forward actions to their natural revert actions
+        const reverseMap = {
+            'show': 'hide',
+            'hide': 'show',
+            'setRequired': 'setNotRequired',
+            'setNotRequired': 'setRequired',
+            'setEditable': 'setNotEditable',
+            'setNotEditable': 'setEditable'
+        };
+        const revertAction = reverseMap[action];
+        if (revertAction) {
+            this.applyRuleAction(targetFieldKey, revertAction);
+        }
     },
 
     /**
@@ -103,23 +251,30 @@ const Preview = {
 
         switch (field.dataType) {
             case 'text':
-                inputHtml = `<input type="text" class="preview-input" placeholder="Enter ${Helpers.escapeHtml(field.label)}" ${field.required ? 'required' : ''} ${field.readOnly ? 'readonly' : ''}>`;
+                if (field.validation?.inputType === 'numeric') {
+                    const minAttr = field.validation?.min !== undefined ? `min="${field.validation.min}"` : '';
+                    const maxAttr = field.validation?.max !== undefined ? `max="${field.validation.max}"` : '';
+                    inputHtml = `<input type="number" id="preview-field-${field.id}" class="preview-input" placeholder="Enter ${Helpers.escapeHtml(field.label)}" ${field.required ? 'required' : ''} ${field.readOnly ? 'readonly' : ''} ${minAttr} ${maxAttr}>`;
+                } else {
+                    inputHtml = `<input type="text" id="preview-field-${field.id}" class="preview-input" placeholder="Enter ${Helpers.escapeHtml(field.label)}" ${field.required ? 'required' : ''} ${field.readOnly ? 'readonly' : ''}>`;
+                }
                 break;
 
             case 'date':
-                inputHtml = `<input type="date" class="preview-input" ${field.required ? 'required' : ''} ${field.readOnly ? 'readonly' : ''}>`;
+                const minDateAttr = field.validation?.min_date ? `min="${field.validation.min_date}"` : '';
+                const maxDateAttr = field.validation?.max_date ? `max="${field.validation.max_date}"` : '';
+                inputHtml = `<input type="date" id="preview-field-${field.id}" class="preview-input" ${field.required ? 'required' : ''} ${field.readOnly ? 'readonly' : ''} ${minDateAttr} ${maxDateAttr}>`;
                 break;
 
             case 'optionlist':
-                console.log('Rendering option list field:', field);
                 if (field.multiSelect) {
                     // Multi-select checkboxes
-                    inputHtml = '<div class="preview-checkbox-group">';
+                    inputHtml = `<div class="preview-checkbox-group" id="preview-field-${field.id}">`;
                     (field.options || []).forEach(option => {
                         inputHtml += `
                             <label class="preview-checkbox-label">
-                                <input type="checkbox" ${field.readOnly ? 'disabled' : ''}>
-                                ${Helpers.escapeHtml(option)}
+                                <input type="checkbox" value="${Helpers.escapeHtml(option.code || option)}" ${field.readOnly ? 'disabled' : ''}>
+                                ${Helpers.escapeHtml(option.label || option)}
                             </label>
                         `;
                     });
@@ -127,10 +282,10 @@ const Preview = {
                 } else {
                     // Single select dropdown
                     inputHtml = `
-                        <select class="preview-input" ${field.required ? 'required' : ''} ${field.readOnly ? 'disabled' : ''}>
+                        <select id="preview-field-${field.id}" class="preview-input" ${field.required ? 'required' : ''} ${field.readOnly ? 'disabled' : ''}>
                             <option value="">Select ${Helpers.escapeHtml(field.label)}</option>
                             ${(field.options || []).map(opt =>
-                        `<option value="${Helpers.escapeHtml(opt)}">${Helpers.escapeHtml(opt)}</option>`
+                        `<option value="${Helpers.escapeHtml(opt.code || opt)}">${Helpers.escapeHtml(opt.label || opt)}</option>`
                     ).join('')}
                         </select>
                     `;
@@ -138,11 +293,11 @@ const Preview = {
                 break;
 
             default:
-                inputHtml = `<input type="text" class="preview-input" placeholder="Enter ${Helpers.escapeHtml(field.label)}">`;
+                inputHtml = `<input type="text" id="preview-field-${field.id}" class="preview-input" placeholder="Enter ${Helpers.escapeHtml(field.label)}">`;
         }
 
         return `
-            <div class="preview-field-group">
+            <div class="preview-field-group" id="preview-wrapper-${field.id}">
                 <label class="preview-label">
                     ${Helpers.escapeHtml(field.label)}${requiredMark}
                 </label>

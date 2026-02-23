@@ -87,7 +87,7 @@ const RuleBuilder = {
                     </div>
                     <div class="action-group">
                         <strong>THEN</strong> <span class="text-primary">${actionLabel}</span> 
-                        "${Helpers.escapeHtml(rule.value)}"
+                        target field "${Helpers.escapeHtml(rule.targetFieldKey || '')}"
                     </div>
                 </div>
             `;
@@ -107,15 +107,11 @@ const RuleBuilder = {
      */
     async addRule() {
         // 1. Select Trigger Field
-        // For simplicity, we'll ask for the Field Key manually or select from existing fields if we had access to them.
-        // Ideally, we should pass the full product definition to RuleBuilder to list other fields.
-        // For now, we'll use a simple input for Field Key.
-
         const triggerFieldKey = await ModalDialog.input(
             'Add Rule - Step 1/3',
             'Enter the Key of the field that triggers this rule:',
             '',
-            { required: true, placeholder: 'e.g. country' }
+            { required: true, placeholder: 'e.g. is_us_based' }
         );
         if (!triggerFieldKey) return;
 
@@ -143,28 +139,15 @@ const RuleBuilder = {
         if (!conditionForm) return;
 
         // 3. Define Action
-        // Action options depend on current field type
-        let actionOptions = [];
-
-        if (this.field.dataType === 'optionlist') {
-            if (this.field.multiSelect) {
-                actionOptions = [
-                    { value: 'select', label: 'Select (Add)' },
-                    { value: 'deselect', label: 'Deselect (Remove)' }
-                ];
-            } else {
-                actionOptions = [
-                    { value: 'select', label: 'Select (Set Value)' },
-                    { value: 'select_any_except', label: 'Select Any Except' }
-                ];
-            }
-        } else {
-            // Default actions for other types
-            actionOptions = [
-                { value: 'set_value', label: 'Set Value' },
-                { value: 'clear', label: 'Clear Value' }
-            ];
-        }
+        // The new enhancement allows an option list to mutate another field.
+        const actionOptions = [
+            { value: 'show', label: 'Make Visible (Applicable)' },
+            { value: 'hide', label: 'Make Hidden (Not Applicable)' },
+            { value: 'setRequired', label: 'Make Required' },
+            { value: 'setNotRequired', label: 'Make Not Required' },
+            { value: 'setEditable', label: 'Make Editable' },
+            { value: 'setNotEditable', label: 'Make Not Editable' }
+        ];
 
         const actionForm = await ModalDialog.form('Add Rule - Step 3/3: Action', [
             {
@@ -175,11 +158,11 @@ const RuleBuilder = {
                 options: actionOptions
             },
             {
-                name: 'value',
-                label: 'Value',
+                name: 'targetFieldKey',
+                label: 'Target Field Key',
                 type: 'text',
                 required: true,
-                placeholder: 'Value to apply'
+                placeholder: 'e.g. tax_id'
             }
         ]);
         if (!actionForm) return;
@@ -192,7 +175,7 @@ const RuleBuilder = {
                 value: conditionForm.value
             },
             action: actionForm.action,
-            value: actionForm.value
+            targetFieldKey: actionForm.targetFieldKey
         };
 
         this.field.rules.push(newRule);
