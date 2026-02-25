@@ -71,26 +71,24 @@
  * @typedef {Object} Rule
  * @property {string} id - Unique identifier
  * @property {string} productDefinitionId - Parent product ID
- * @property {'field'|'section'} targetType - Target type
- * @property {string} targetId - Target element ID
- * @property {'display'|'validation'|'requirement'} ruleType - Rule type
- * @property {Condition[]} conditions - Array of conditions
- * @property {string} logicOperator - 'AND' or 'OR' for multiple conditions
- * @property {Action} action - Action to perform
+ * @property {RuleTrigger} trigger - Extracted trigger constraint
+ * @property {RuleAction[]} actions - Array of actions when true
  * @property {string} errorMessage - Error message for validation rules
  */
 
 /**
- * @typedef {Object} Condition
- * @property {string} fieldId - Field to evaluate
- * @property {string} operator - Comparison operator
- * @property {*} value - Value to compare against
+ * @typedef {Object} RuleTrigger
+ * @property {'user'} subject - Hardcoded to 'user'
+ * @property {'selects'|'deselects'|'selects_any_except'} operator - Operator
+ * @property {string} source_question_id - Field key triggering this rule
+ * @property {string} option_value - The specific option code/label triggering
  */
 
 /**
- * @typedef {Object} Action
- * @property {'show'|'hide'|'setRequired'|'setNotRequired'|'setEditable'|'setNotEditable'|'select'|'deselect'|'select_any_except'|'set_value'|'clear'|'error'} type - Action type
- * @property {*} value - Action value
+ * @typedef {Object} RuleAction
+ * @property {string} target_question_id - Field targeted
+ * @property {'visibility'|'required'|'editable'} property - Property to mutate
+ * @property {boolean} value - True/False state for the property
  */
 
 /**
@@ -227,12 +225,8 @@ export const Models = {
         return {
             id: data.id || generateId(),
             productDefinitionId: data.productDefinitionId || '',
-            targetType: data.targetType || 'field',
-            targetId: data.targetId || '',
-            ruleType: data.ruleType || 'display',
-            conditions: data.conditions || [],
-            logicOperator: data.logicOperator || 'AND',
-            action: data.action || { type: 'show', value: true },
+            trigger: data.trigger || { subject: 'user', operator: 'selects', source_question_id: '', option_value: '' },
+            actions: data.actions || [],
             errorMessage: data.errorMessage || ''
         };
     },

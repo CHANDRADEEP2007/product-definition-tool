@@ -10,11 +10,13 @@ const RuleBuilder = {
      * Render the rule builder for a field
      * @param {HTMLElement} container
      * @param {Object} field
+     * @param {Object} productDefinition - Full product context to pull fields and options from
      * @param {Function} onSave - Callback when rules are saved
      */
-    render(container, field, onSave) {
+    render(container, field, productDefinition, onSave) {
         this.container = container;
         this.field = field;
+        this.productDefinition = productDefinition;
         this.onSave = onSave;
 
         // Initialize rules if not present
@@ -62,7 +64,7 @@ const RuleBuilder = {
         Helpers.clearElement(list);
 
         if (this.field.rules.length === 0) {
-            list.innerHTML = '<p class="text-muted text-sm">No rules defined.</p>';
+            list.innerHTML = '<p class="text-muted text-sm">No rules defined for this question.</p>';
             return;
         }
 
@@ -70,9 +72,13 @@ const RuleBuilder = {
             const ruleEl = document.createElement('div');
             ruleEl.className = 'rule-item';
 
-            // Determine action label based on type
-            let actionLabel = rule.action;
-            if (rule.action === 'select_any_except') actionLabel = 'Select Any Except';
+            // Build action text
+            const actionsText = rule.actions && rule.actions.length > 0
+                ? rule.actions.map(a => `make ${Helpers.escapeHtml(a.target_question_id)} ${a.value ? '' : 'Not '}${Helpers.escapeHtml(a.property)}`).join(', ')
+                : 'None';
+
+            // Format constraint: If User [operator] [option] in [source question]
+            const opDisplay = rule.trigger.operator.replace(/_/g, ' '); // selects_any_except -> selects any except
 
             ruleEl.innerHTML = `
                 <div class="rule-header">
@@ -80,106 +86,159 @@ const RuleBuilder = {
                     <button class="btn-icon btn-sm text-danger" data-index="${index}" title="Delete Rule">🗑️</button>
                 </div>
                 <div class="rule-content">
-                    <div class="condition-group">
-                        <strong>IF</strong> ${Helpers.escapeHtml(rule.condition.fieldKey)} 
-                        <span class="badge badge-draft">${rule.condition.operator}</span> 
-                        "${Helpers.escapeHtml(rule.condition.value)}"
+                    <div class="condition-group" style="padding: 12px; background: var(--color-bg-tertiary); border-radius: var(--radius-sm); margin-bottom: 8px;">
+                        <span class="text-secondary">If</span> <strong>User</strong> 
+                        <span class="text-primary">${Helpers.escapeHtml(opDisplay)}</span> 
+                        <span class="badge badge-draft">"${Helpers.escapeHtml(rule.trigger.option_value)}"</span>
+                        <span class="text-secondary">in</span> <strong>${Helpers.escapeHtml(rule.trigger.source_question_id)}</strong>
                     </div>
-                    <div class="action-group">
-                        <strong>THEN</strong> <span class="text-primary">${actionLabel}</span> 
-                        target field "${Helpers.escapeHtml(rule.targetFieldKey || '')}"
+                    <div class="action-group" style="padding: 12px; background: var(--color-bg-primary); border-radius: var(--radius-sm);">
+                        <strong>Then</strong> <span class="text-primary">${actionsText}</span>
                     </div>
                 </div>
             `;
 
             // Delete button
-            ruleEl.querySelector('button').addEventListener('click', (e) => {
-                const idx = parseInt(e.currentTarget.dataset.index);
-                this.deleteRule(idx);
-            });
+            const btn = ruleEl.querySelector('button');
+            if (btn) {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.currentTarget.dataset.index);
+                    this.deleteRule(idx);
+                });
+            }
 
             list.appendChild(ruleEl);
         });
     },
 
     /**
-     * Add a new rule
+     * Add a new rule wizard flow
      */
     async addRule() {
-        // 1. Select Trigger Field
-        const triggerFieldKey = await ModalDialog.input(
-            'Add Rule - Step 1/3',
-            'Enter the Key of the field that triggers this rule:',
-            '',
-            { required: true, placeholder: 'e.g. is_us_based' }
-        );
-        if (!triggerFieldKey) return;
+        // Find valid active optionlist questions for source dropdown (excluding self)
+        const validSourceQuestions = (this.productDefinition?.fields || [])
+            .filter(f => f.dataType === 'optionlist' && f.status !== 'Deprecated')
+            .map(f => ({ value: f.key || f.id, label: f.label || f.key || f.id }));
 
-        // 2. Define Condition
-        const conditionForm = await ModalDialog.form('Add Rule - Step 2/3: Condition', [
+        if (validSourceQuestions.length === 0) {
+            alert('No active Multiple Choice questions found in this product to act as a trigger source.');
+            return;
+        }
+
+        // --- STEP 1: Define Trigger Source & Operator ---
+        const triggerForm = await ModalDialog.form('Add Rule - Step 1/3: Trigger', [
             {
                 name: 'operator',
-                label: 'Operator',
+                label: 'If User...',
                 type: 'select',
                 required: true,
                 options: [
-                    { value: 'equals', label: 'Equals' },
-                    { value: 'not_equals', label: 'Does not equal' },
-                    { value: 'contains', label: 'Contains' }
+                    { value: 'selects', label: 'selects' },
+                    { value: 'deselects', label: 'deselects' },
+                    { value: 'selects_any_except', label: 'selects any except' }
+                ]
+            },
+            {
+                name: 'source_question_id',
+                label: 'In Question',
+                type: 'select',
+                required: true,
+                options: validSourceQuestions
+            }
+        ]);
+        if (!triggerForm) return;
+
+        // Self-Reference Check (Backend backup, but enforcing UI here)
+        if (triggerForm.source_question_id === (this.field.key || this.field.id)) {
+            alert('Cannot create a rule that evaluates its own field value (Self-Reference).');
+            return;
+        }
+
+        // --- STEP 2: Pick Option ---
+        // Find the selected source field to get its options options
+        const sourceField = this.productDefinition.fields.find(f => (f.key || f.id) === triggerForm.source_question_id);
+        const sourceOptionsList = (sourceField?.options || []).map(o => ({ value: o.code || o.label, label: o.label || o.code }));
+
+        if (sourceOptionsList.length === 0) {
+            alert(`The selected source question "${triggerForm.source_question_id}" has no configured options to trigger against.`);
+            return;
+        }
+
+        const optionForm = await ModalDialog.form('Add Rule - Step 2/3: Option Value', [
+            {
+                name: 'option_value',
+                label: 'Target Option',
+                type: 'select',
+                required: true,
+                options: sourceOptionsList
+            }
+        ]);
+        if (!optionForm) return;
+
+        // --- STEP 3: Define Target Action ---
+        // Find valid target questions (excluding source question to prevent circular via UI, and excluding deleted)
+        // Note: The UI explicitly excludes the source _trigger_ question.
+        const validTargetQuestions = (this.productDefinition?.fields || [])
+            .filter(f => f.status !== 'Deprecated' && (f.key || f.id) !== triggerForm.source_question_id)
+            .map(f => ({ value: f.key || f.id, label: f.label || f.key || f.id }));
+
+        if (validTargetQuestions.length === 0) {
+            alert('No valid target questions available to mutate.');
+            return;
+        }
+
+        const actionForm = await ModalDialog.form('Add Rule - Step 3/3: Action (Then)', [
+            {
+                name: 'target_question_id',
+                label: 'Target Question (Cannot be trigger)',
+                type: 'select',
+                required: true,
+                options: validTargetQuestions
+            },
+            {
+                name: 'property',
+                label: 'Property to Change',
+                type: 'select',
+                required: true,
+                options: [
+                    { value: 'visibility', label: 'Visibility' },
+                    { value: 'required', label: 'Required' },
+                    { value: 'editable', label: 'Editable' }
                 ]
             },
             {
                 name: 'value',
-                label: 'Value',
-                type: 'text',
-                required: true,
-                placeholder: 'Value to match'
-            }
-        ]);
-        if (!conditionForm) return;
-
-        // 3. Define Action
-        // The new enhancement allows an option list to mutate another field.
-        const actionOptions = [
-            { value: 'show', label: 'Make Visible (Applicable)' },
-            { value: 'hide', label: 'Make Hidden (Not Applicable)' },
-            { value: 'setRequired', label: 'Make Required' },
-            { value: 'setNotRequired', label: 'Make Not Required' },
-            { value: 'setEditable', label: 'Make Editable' },
-            { value: 'setNotEditable', label: 'Make Not Editable' }
-        ];
-
-        const actionForm = await ModalDialog.form('Add Rule - Step 3/3: Action', [
-            {
-                name: 'action',
-                label: 'Action',
+                label: 'Target State',
                 type: 'select',
                 required: true,
-                options: actionOptions
-            },
-            {
-                name: 'targetFieldKey',
-                label: 'Target Field Key',
-                type: 'text',
-                required: true,
-                placeholder: 'e.g. tax_id'
+                options: [
+                    { value: 'true', label: 'True (Make property apply)' },
+                    { value: 'false', label: 'False (Remove property)' }
+                ]
             }
         ]);
         if (!actionForm) return;
 
-        // Construct Rule
+        // Construct full Rule to match PRD constraint schema
         const newRule = {
-            condition: {
-                fieldKey: triggerFieldKey,
-                operator: conditionForm.operator,
-                value: conditionForm.value
+            id: `rule_${Date.now()}`,
+            trigger: {
+                subject: 'user',
+                operator: triggerForm.operator,
+                source_question_id: triggerForm.source_question_id,
+                option_value: optionForm.option_value
             },
-            action: actionForm.action,
-            targetFieldKey: actionForm.targetFieldKey
+            actions: [
+                {
+                    target_question_id: actionForm.target_question_id,
+                    property: actionForm.property,
+                    value: actionForm.value === 'true'
+                }
+            ]
         };
 
         this.field.rules.push(newRule);
-        this.onSave(); // Trigger save
+        this.onSave(); // Trigger save to cascade state update
         this.renderRulesList();
     },
 

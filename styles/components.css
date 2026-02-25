@@ -1149,3 +1149,144 @@ input[type="radio"] {
     padding-bottom: var(--space-xs);
     margin-bottom: var(--space-sm);
 }
+
+/* ================================
+   EXPANDED ROW CONFIGURATION
+   ================================ */
+
+.builder-row-wrapper {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: var(--space-sm);
+    background: var(--color-bg-primary);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+}
+
+.builder-row-wrapper.is-expanded {
+    border-color: var(--color-border-strong);
+    box-shadow: var(--shadow-md);
+    background: var(--color-bg-secondary);
+}
+
+/* Redefine builder row when inside wrapper to remove margins for seamless connection */
+.builder-row-wrapper .builder-row {
+    border: none;
+    border-radius: var(--radius-sm);
+    box-shadow: none;
+    margin-bottom: 0;
+}
+
+.builder-row-wrapper.is-expanded .builder-row {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-bottom: 1px solid var(--color-border-default);
+}
+
+.row-expand-icon {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    width: 24px;
+    height: 24px;
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-xl);
+    cursor: pointer;
+    transition: transform var(--transition-fast);
+}
+
+.builder-row-wrapper.is-expanded .row-expand-icon {
+    transform: rotate(90deg);
+}
+
+.expanded-panel {
+    display: none;
+    flex-direction: column;
+    padding: 0;
+    background: var(--color-bg-primary);
+    border-bottom-left-radius: var(--radius-sm);
+    border-bottom-right-radius: var(--radius-sm);
+    animation: slideDown var(--transition-fast);
+}
+
+.builder-row-wrapper.is-expanded .expanded-panel {
+    display: flex;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Expanded Panel Tabs */
+.panel-tabs-header {
+    display: flex;
+    border-bottom: 1px solid var(--color-border-default);
+    background: var(--color-bg-secondary);
+    padding: 0 var(--space-lg);
+}
+
+.panel-tab-btn {
+    padding: var(--space-md) var(--space-lg);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.panel-tab-btn:hover {
+    color: var(--color-text-primary);
+}
+
+.panel-tab-btn.active {
+    color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
+}
+
+.panel-tab-content {
+    display: none;
+    padding: var(--space-lg);
+}
+
+.panel-tab-content.active {
+    display: block;
+}
+
+/* Forms inside the expanded tab */
+.expanded-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-lg);
+}
+
+.config-section {
+    background: var(--color-bg-secondary);
+    padding: var(--space-md);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border-default);
+    margin-bottom: var(--space-md);
+}
+
+.config-section h5 {
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    color: var(--color-text-tertiary);
+    margin-bottom: var(--space-md);
+    letter-spacing: 0.05em;
+}
+
+.inline-checkbox-group {
+    display: flex;
+    gap: var(--space-lg);
+}

@@ -617,6 +617,9 @@ const Designer = {
      * @returns {HTMLElement}
      */
     createBuilderRowElement(field, mode = 'setup') {
+        const wrapperEl = document.createElement('div');
+        wrapperEl.className = 'builder-row-wrapper';
+
         const rowEl = document.createElement('div');
         rowEl.className = 'builder-row';
         rowEl.dataset.fieldId = field.id;
@@ -646,7 +649,7 @@ const Designer = {
                 </div>
 
                 <div class="row-actions">
-                    <span class="row-expand-icon">›</span>
+                    <span class="row-expand-icon" title="Expand Details">›</span>
                 </div>
             `;
         } else {
@@ -679,18 +682,42 @@ const Designer = {
                 </div>
 
                 <div class="row-actions">
-                    <span class="row-expand-icon">›</span>
+                    <span class="row-expand-icon" title="Expand Details">›</span>
                 </div>
             `;
         }
 
+        wrapperEl.appendChild(rowEl);
+
         // Click to select row
         rowEl.addEventListener('click', (e) => {
             // Prevent selection if clicking a toggle
-            if (e.target.tagName !== 'INPUT' && !e.target.classList.contains('ui-toggle-slider')) {
+            if (e.target.tagName !== 'INPUT' && !e.target.classList.contains('ui-toggle-slider') && !e.target.classList.contains('row-expand-icon')) {
                 this.selectField(field);
             }
         });
+
+        // Expand toggle
+        const expandIcon = rowEl.querySelector('.row-expand-icon');
+        if (expandIcon) {
+            expandIcon.addEventListener('click', (e) => {
+                e.stopPropagation();
+                // Close all other expanded rows for a cleaner UX
+                document.querySelectorAll('.builder-row-wrapper.is-expanded').forEach(w => {
+                    if (w !== wrapperEl) w.classList.remove('is-expanded');
+                });
+
+                const isExpanded = wrapperEl.classList.toggle('is-expanded');
+                if (isExpanded) {
+                    let panelEl = wrapperEl.querySelector('.expanded-panel');
+                    if (!panelEl) {
+                        panelEl = this.renderExpandedPanel(field, wrapperEl);
+                        wrapperEl.appendChild(panelEl);
+                    }
+                    this.selectField(field);
+                }
+            });
+        }
 
         // Add event listeners for toggles
         const appToggle = rowEl.querySelector('.toggle-applicable');
@@ -725,7 +752,178 @@ const Designer = {
             });
         }
 
-        return rowEl;
+        return wrapperEl;
+    },
+
+    /**
+     * Render the expanded panel containing tabs
+     * @param {Field} field 
+     * @param {HTMLElement} wrapperEl
+     * @returns {HTMLElement} 
+     */
+    renderExpandedPanel(field, wrapperEl) {
+        const panelEl = document.createElement('div');
+        panelEl.className = 'expanded-panel';
+
+        const canEdit = Permissions.can('product:edit');
+
+        // Create Tabs structure
+        panelEl.innerHTML = `
+            <div class="panel-tabs-header">
+                <button class="panel-tab-btn active" data-tab="question-${field.id}">Question</button>
+                ${field.dataType === 'optionlist' ? `<button class="panel-tab-btn" data-tab="rules-${field.id}">Rules (${(field.rules || []).length})</button>` : ''}
+            </div>
+            <div class="panel-tab-content active" id="tab-question-${field.id}">
+                <div class="expanded-form-grid">
+                    <div class="config-section">
+                        <h5>Basic Information</h5>
+                        <div class="form-group">
+                            <label>Question Name (Required)</label>
+                            <input type="text" class="exp-prop-label" value="${Helpers.escapeHtml(field.label)}" ${!canEdit ? 'disabled' : ''}>
+                        </div>
+                        <div class="form-group">
+                            <label>Description</label>
+                            <input type="text" class="exp-prop-description" value="${Helpers.escapeHtml(field.description || '')}" ${!canEdit ? 'disabled' : ''}>
+                        </div>
+                        <div class="form-group">
+                            <label>Key</label>
+                            <input type="text" class="exp-prop-key" value="${field.key}" ${!canEdit ? 'disabled' : ''}>
+                        </div>
+                    </div>
+                    <div class="config-section">
+                        <h5>Settings & Attributes</h5>
+                        <div class="form-group">
+                            <label>Type (Required)</label>
+                            <select class="exp-prop-type" disabled>
+                                <option value="text" ${field.dataType === 'text' ? 'selected' : ''}>Text Input</option>
+                                <option value="number" ${field.dataType === 'number' ? 'selected' : ''}>Number</option>
+                                <option value="optionlist" ${field.dataType === 'optionlist' ? 'selected' : ''}>Multiple Choice</option>
+                                <option value="date" ${field.dataType === 'date' ? 'selected' : ''}>Date</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Middle Office Attributes</label>
+                            <div class="inline-checkbox-group">
+                                <label class="row-checkbox">
+                                    <input type="checkbox" class="exp-prop-app" ${field.applicable ? 'checked' : ''} ${!canEdit ? 'disabled' : ''}>
+                                    Applicable
+                                </label>
+                                <label class="row-checkbox">
+                                    <input type="checkbox" class="exp-prop-req" ${field.required ? 'checked' : ''} ${!canEdit ? 'disabled' : ''}>
+                                    Required
+                                </label>
+                                <label class="row-checkbox">
+                                    <input type="checkbox" class="exp-prop-edt" ${field.editable ? 'checked' : ''} ${!canEdit ? 'disabled' : ''}>
+                                    Editable
+                                </label>
+                            </div>
+                        </div>
+                        ${field.dataType === 'optionlist' ? `
+                        <div class="form-group options-actions">
+                            <label>Options</label>
+                            <button class="btn btn-secondary btn-sm exp-btn-options" ${!canEdit ? 'disabled' : ''}>Edit Options (${(field.options || []).length})</button>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+            ${field.dataType === 'optionlist' ? `
+            <div class="panel-tab-content" id="tab-rules-${field.id}">
+                <!-- Rules Builder will be mounted here -->
+            </div>
+            ` : ''}
+        `;
+
+        // Wire Tab Switching
+        const tabBtns = panelEl.querySelectorAll('.panel-tab-btn');
+        const tabContents = panelEl.querySelectorAll('.panel-tab-content');
+
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                tabBtns.forEach(b => b.classList.remove('active'));
+                tabContents.forEach(c => c.classList.remove('active'));
+
+                btn.classList.add('active');
+                const targetId = btn.dataset.tab;
+                panelEl.querySelector('#tab-' + targetId).classList.add('active');
+            });
+        });
+
+        // Initialize RuleBuilder in Rules Tab ONLY if it exists (OptionList)
+        const rulesTab = panelEl.querySelector(`#tab-rules-${field.id}`);
+        if (rulesTab) {
+            RuleBuilder.render(rulesTab, field, this.currentProduct, () => {
+                // Update rule count in tab header
+                const ruleBtn = panelEl.querySelector(`[data-tab="rules-${field.id}"]`);
+                if (ruleBtn) {
+                    ruleBtn.textContent = `Rules (${(field.rules || []).length})`;
+                }
+                this.save();
+            });
+        }
+
+        // Wire Form Input Events
+        if (canEdit) {
+            const syncLabel = panelEl.querySelector('.exp-prop-label');
+            syncLabel.addEventListener('change', (e) => {
+                field.label = e.target.value;
+                const rowLabel = wrapperEl.querySelector('.row-label');
+                if (rowLabel) rowLabel.textContent = field.label; // update visually inline
+                this.save();
+            });
+
+            const syncDesc = panelEl.querySelector('.exp-prop-description');
+            syncDesc.addEventListener('change', (e) => {
+                field.description = e.target.value;
+                this.save();
+            });
+
+            const syncKey = panelEl.querySelector('.exp-prop-key');
+            syncKey.addEventListener('change', (e) => {
+                field.key = e.target.value;
+                this.save();
+            });
+
+            const syncApp = panelEl.querySelector('.exp-prop-app');
+            syncApp.addEventListener('change', (e) => {
+                field.applicable = e.target.checked;
+                const rowApp = wrapperEl.querySelector('.toggle-applicable');
+                if (rowApp) rowApp.checked = e.target.checked;
+                this.save();
+            });
+
+            const syncReq = panelEl.querySelector('.exp-prop-req');
+            syncReq.addEventListener('change', (e) => {
+                field.required = e.target.checked;
+                const rowReq = wrapperEl.querySelector('.toggle-required');
+                if (rowReq) rowReq.checked = e.target.checked;
+                this.save();
+            });
+
+            const syncEdt = panelEl.querySelector('.exp-prop-edt');
+            syncEdt.addEventListener('change', (e) => {
+                field.editable = e.target.checked;
+                const rowEdt = wrapperEl.querySelector('.toggle-editable');
+                if (rowEdt) rowEdt.checked = e.target.checked;
+                this.save();
+            });
+
+            const btnOptions = panelEl.querySelector('.exp-btn-options');
+            if (btnOptions) {
+                btnOptions.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    const options = await OptionsEditor.edit(field.options || []);
+                    if (options && options.length > 0) {
+                        field.options = options;
+                        btnOptions.textContent = `Edit Options (${options.length})`;
+                        this.save();
+                    }
+                });
+            }
+        }
+
+        return panelEl;
     },
 
     /**
